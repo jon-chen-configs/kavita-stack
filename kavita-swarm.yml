@@ -36,6 +36,8 @@ services:
           - node.hostname != ${NAS_HOSTNAME}
       restart_policy:
         condition: on-failure
+    volumes:
+      - kavitaemail_data:/app/config
     expose:
       - 5003
     networks:
@@ -105,6 +107,11 @@ volumes:
       type: nfs
       o: addr=${NAS_HOST},nolock,noresvport,vers=2
       device: :${DATADIR}/kavita-stack/kavita
+  kavitaemail_data:
+    driver_opts:
+      type: nfs
+      o: addr=${NAS_HOST},nolock,noresvport,vers=2
+      device: :${DATADIR}/kavita-stack/kavitaemail
   data_share:
     driver_opts:
       type: nfs

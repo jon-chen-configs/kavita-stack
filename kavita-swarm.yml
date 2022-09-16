@@ -1,0 +1,129 @@
+services:
+  kavita:
+    image: kizaing/kavita:latest
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.platform.arch != aarch64]
+      restart_policy:
+        condition: on-failure
+      labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-net
+      - traefik.http.routers.kavita.rule=Host(`kavita.cynicsoft.net`)
+      - traefik.http.routers.kavita.entrypoints=https
+      - traefik.http.routers.kavita.middlewares=internal-whitelist
+      - traefik.http.services.kavita.loadbalancer.server.port=5000
+    networks:
+      - traefik-net
+      - default
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data_share:/mnt/data:rw
+      - kavita_data:/kavita/config
+
+  email:
+    image: kizaing/kavitaemail:latest
+    env_file: ["${ENV_DIR:-swarm-envs}/swarm/kavita-stack/kavitaemail.env"]
+    deploy:
+      replicas: 1
+      placement:
+        # Docker (20.10.3) on Synology bug where env vars from env_file 
+        # not set on container.
+        # constraints: [node.platform.arch != aarch64]
+        constraints:
+          - node.platform.arch != aarch64
+          - node.hostname != ${NAS_HOSTNAME}
+      restart_policy:
+        condition: on-failure
+    expose:
+      - 5003
+    networks:
+      - default
+
+  smtp:
+    image: namshi/smtp:latest
+    env_file: ["${ENV_DIR:-swarm-envs}/swarm/shared/namshi_smtp.env"]
+    deploy:
+      replicas: 1
+      placement:
+        # Docker (20.10.3) on Synology bug where env vars from env_file 
+        # not set on container.
+        # constraints: [node.platform.arch != aarch64]
+        constraints:
+          - node.platform.arch != aarch64
+          - node.hostname != ${NAS_HOSTNAME}
+    networks:
+      - default
+
+  # Get api token:
+  # wget -SO - --post-data='{"Username": "", "Password": ""}' --header "Content-Type:application/json" https://kavita.cynicsoft.net/api/account/login
+  # Backup db:
+  # wget -SO - --header="Authorization: Bearer <jwt_token>" --post-data={} https://kavita.cynicsoft.net/api/server/backup-db
+  kavita-backup-db-job:
+    image: docker-hub.cynicsoft.net/alpine-base:latest
+    env_file: ["${ENV_DIR:-swarm-envs}/swarm/kavita-stack/backup-db-job.env"]
+    deploy:
+      mode: replicated
+      replicas: 0
+      placement:
+        # Docker (20.10.3) on Synology bug where env vars from env_file 
+        # not set on container.
+        # constraints: [node.platform.arch != aarch64]
+        constraints:
+          - node.platform.arch != aarch64
+          - node.hostname != ${NAS_HOSTNAME}
+      restart_policy:
+        condition: none
+      labels:
+        - swarm.cronjob.enable=true
+        - swarm.cronjob.schedule=@daily
+    networks:
+      - healthchecks-swarm_default
+      - default
+    command: >-
+      sh -c 'LOG=/logs/kavita-backup-db-job.log;
+      date > $$LOG &&
+      wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95/start >> $$LOG 2>&1 &&
+      echo backing up db... >> $$LOG;
+      TOKEN=$$(wget -SO - --post-data="{\"Username\": \"$$KAVITA_USERNAME\", \"Password\": \"$$KAVITA_PASSWORD\"}" --header "Content-Type:application/json" http://kavita:5000/api/account/login | jq -r ".token");
+      wget -SO - --header="Authorization: Bearer $$TOKEN" --post-data={} http://kavita:5000/api/server/backup-db >> $$LOG 2>&1 &&
+      mv $$(find /kavita/config/backups -type f -name "kavita_backup_*" -print0 | xargs -0 ls -t | head -n 1) /backups/data/sqlite &&
+      ls -dt /backups/data/sqlite/* | grep kavita_backup_ | tail -n +3 | xargs rm -- >> $$LOG &&
+      echo done. >> $$LOG &&
+      wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95 >> $$LOG 2>&1'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - kavita_data:/kavita/config
+      - kavita-stack_logs:/logs
+      - backups:/backups
+
+
+volumes:
+  kavita_data:
+    driver_opts:
+      type: nfs
+      o: addr=${NAS_HOST},nolock,noresvport,vers=2
+      device: :${DATADIR}/kavita-stack/kavita
+  data_share:
+    driver_opts:
+      type: nfs
+      o: addr=${NAS_HOST},nolock,noresvport,vers=2
+      device: :/volume1/Data
+  kavita-stack_logs:
+    driver_opts:
+      type: nfs
+      o: addr=${NAS_HOST},nolock,noresvport,vers=2
+      device: :${DATADIR}/kavita-stack/logs
+  backups:
+    driver_opts:
+      type: nfs
+      o: addr=${NAS_HOST},nolock,noresvport,vers=2
+      device: :/volume1/docker/backups
+
+
+networks:
+  traefik-net:
+    external: true
+  healthchecks-swarm_default:
+    external: true

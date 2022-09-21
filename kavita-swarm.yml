@@ -14,6 +14,11 @@ services:
       - traefik.http.routers.kavita.entrypoints=https
       - traefik.http.routers.kavita.middlewares=internal-whitelist
       - traefik.http.services.kavita.loadbalancer.server.port=5000
+      - homepage.name=Kavita 
+      - homepage.group=Media
+      - homepage.icon=https://raw.githubusercontent.com/modem7/MiscAssets/master/Icons/Dashboard-Icons/kavita.png
+      - homepage.href=https://kavita.cynicsoft.net/
+      - homepage.description=Book and comic library
     networks:
       - traefik-net
       - default

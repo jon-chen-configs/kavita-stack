@@ -92,15 +92,15 @@ services:
       - default
     command: >-
       sh -c 'LOG=/logs/kavita-backup-db-job.log;
-      date > $$LOG &&
-      wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95/start >> $$LOG 2>&1 &&
-      echo backing up db... >> $$LOG;
-      TOKEN=$$(wget -SO - --post-data="{\"Username\": \"$$KAVITA_USERNAME\", \"Password\": \"$$KAVITA_PASSWORD\"}" --header "Content-Type:application/json" http://kavita:5000/api/account/login | jq -r ".token");
-      wget -SO - --header="Authorization: Bearer $$TOKEN" --post-data={} http://kavita:5000/api/server/backup-db >> $$LOG 2>&1 &&
-      mv $$(find /kavita/config/backups -type f -name "kavita_backup_*" -print0 | xargs -0 ls -t | head -n 1) /backups/data/sqlite &&
-      ls -dt /backups/data/sqlite/* | grep kavita_backup_ | tail -n +3 | xargs rm -- >> $$LOG &&
-      echo done. >> $$LOG &&
-      wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95 >> $$LOG 2>&1'
+      date 2>&1 | tee $$LOG;
+      wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95/start 2>&1 | tee -a $$LOG;
+      echo "backing up db..." 2>&1 | tee -a $$LOG;
+      TOKEN=$$(wget -SO - --post-data="{\"Username\": \"$$KAVITA_USERNAME\", \"Password\": \"$$KAVITA_PASSWORD\"}" --header "Content-Type:application/json" http://kavita:5000/api/account/login | jq -r ".token") 2>&1 | tee -a $$LOG;
+      wget -SO - --header="Authorization: Bearer $$TOKEN" --post-data={} http://kavita:5000/api/server/backup-db 2>&1 | tee -a $$LOG &&
+      mv $$(find /kavita/config/backups -type f -name "kavita_backup_*" -print0 | xargs -0 ls -t | head -n 1) /backups/data/sqlite 2>&1 | tee -a $$LOG &&
+      ls -dt /backups/data/sqlite/* | grep kavita_backup_ | tail -n +3 | xargs rm -- 2>&1 | tee -a $$LOG &&
+      echo "done." 2>&1 | tee -a $$LOG;
+      wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95/$$? 2>&1 | tee -a $$LOG'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - kavita_data:/kavita/config

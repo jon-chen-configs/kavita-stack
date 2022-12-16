@@ -92,6 +92,7 @@ services:
       - default
     command: >-
       sh -c 'LOG=/logs/kavita-backup-db-job.log;
+      set -o pipefail;
       date 2>&1 | tee $$LOG;
       wget -SO - http://tasks.healthchecks:8000/ping/486ae69e-e36a-4fcf-806b-48ce2a73dc95/start 2>&1 | tee -a $$LOG;
       echo "backing up db..." 2>&1 | tee -a $$LOG;
